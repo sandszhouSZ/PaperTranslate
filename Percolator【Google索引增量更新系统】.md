@@ -47,6 +47,7 @@ Percolator是建立在分布式的Bigtable系统之上。Bigtable对用户呈现
 ## 2.2 事务
 
 Percolator通过ACID 快照隔离语义提供跨行、跨表的事务。Percolator的用户通过使用特定的语言(当前为C++) 在其代码中调用Percolator API来完成他们的事务逻辑。表2展示了通过对其内容进行哈希来对集群文档进行聚类的简化版本：
+
 ![使用PercolatorApi进行checksum计算](E:\Paper\Google论文集合\论文翻译\使用PercolatorApi进行checksum计算.png)
 
 
@@ -63,7 +64,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
 然而，部署Percolator的任何Client节点都可以执行对Bigtable表中的状态修改：没有一个合适的地方拦截通信并分配锁。这样，Percolator必须显式的维护锁。\color{red}锁必须在节点异常期间一直存在；如果一个锁在提交的两个阶段之间丢失，系统会错误的提交两个可能存在冲突的事务。\color{red}锁服务必须提供高吞吐；数千台机器将会同时申请锁。\color{red}锁服务也必须低延迟；每个Get()操作除了读取数据也要读锁，我们希望最小化延迟。基于这些约束，锁服务需要有多副本（去单），分布式，负载均衡（均分负载），写到一个持久化数据存储中。Bigtable本身符合所有的这些需求 ，所以Percolator将锁存储在相关Bigtable特定的内存列，当访问某一行数据时在Bigtable的行事务中读取锁或者修改锁。
 
 我们现在更加详细的描述事务协议。表6展示了Percolator的伪代码，表4展示了事务执行期间Percolator数据和元数据的布局，这些不同的元数据列被系统按照表5的形式使用。事务的构造需要访问timestamp服务获取一个开始时间戳（line 6），该值决定了Get()操作可以看到的一致性快照。Set()操作会本地buffer（line 7）直到最后进行提交。提交buffer缓冲的数据是一个两阶段步骤，这两个阶段需要通过client进行协调。不同节点间的事务通过Bigtable 分片tablet节点间的行事务来完成。
-
+```
     图4注解：
     各列的含义见图5注解
     
@@ -221,7 +222,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
     } // class Transaction
     
     		Figure 6: Pseudocode for Percolator transaction protocol
-
+```
 在commit的第一阶段（prewrite 核心\color{red}加锁修改数据），我们尝试锁定被写的所有cell。（为了处理client端的异常，我们随机指定一个锁为主锁；我们稍后会介绍这个机制）。事务通过读待写入的所有cell的元数据来检查是否存在冲突。有两种冲突元数据：如果事务在startTimestamp之后看到另外一个写记录，说明自己过期，需要及时中断；这是快照隔离机制需要防范的一种写-写冲突。如果事务在任何时间戳看到另外lock列的锁标志，也需要及时终端。这是由于另外一个事务在已经提前获取开始时间戳并且预先提交结束后，commit第二个阶段太慢从而导致释放锁过慢，但我们认为这种情况不应该出现，所以我们中断。如果没有出现冲突，我们将该cell的lock列写入锁信息和data列写入最新的数据信息。
 
 如果没有cell冲突，事务将开始提交并且进行到第二阶段(\color{red}解锁使数据可见 )。第二阶段的开始，客户端从全局时钟获取commit时间戳。然后对于每个cell节点（优先主），客户端释放锁并且使得写入对读可见。这通过则更加write列记录实现。write列记录向读者指示该cell中当前提交的数据时间戳；包含一个到start 时间戳的指针，通过该指针，读请求可以找到实际的数据。一旦主cell上的写对外可见，该事务必须保证提交成功（\color{red}即如果从提交失败需要不停重试）。
