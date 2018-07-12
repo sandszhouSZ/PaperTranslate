@@ -47,7 +47,7 @@ Percolator是建立在分布式的Bigtable系统之上。Bigtable对用户呈现
 ## 2.2 事务
 
 Percolator通过ACID 快照隔离语义提供跨行、跨表的事务。Percolator的用户通过使用特定的语言(当前为C++) 在其代码中调用Percolator API来完成他们的事务逻辑。表2展示了通过对其内容进行哈希来对集群文档进行聚类的简化版本：
-
+![使用PercolatorApi进行checksum计算](E:\Paper\Google论文集合\论文翻译\使用PercolatorApi进行checksum计算.png)
 
 
 如果Commit()返回false，表明这个事务出现冲突（这个例子中，是由于两个具有相同内容的URL的同时被处理），其会在稍后进行重试。对Get()和Commit()的调用会阻塞；通过在线程池中同时执行很多事务来达到并发。
