@@ -48,16 +48,21 @@ Bigtable支持其他的一些特性以便用户可以以非常复杂的方式操
 
 Bigtable可以和MapReduce一起使用来进行Google的大规模并行计算。我们已经编写了很多封装来让Bigtable可以被当作输入源同时作为MapReduce任务的输出结果。
 
-## 4 创建块
+# 4 SSTable结构
 Bigtable构建在其他的一些Google基础设施之上。Bigtable使用分布式文件系统GFS来存储数据文件。一个Bigtable集群一般运行于一组共享的机器池中为大量的不同业务场景的应用提供服务。并且Bigtable进程和其他应用进程共享机器。Bigtable依赖一个集群管理系统进行任务调度，资源管理，状态监控。
 
 Google SSTable文件格式被用于存储Bigtable数据。一个SSTable提供一个持久的，有序的不可更改的从key到value的映射，其中key和value都是任意的字节序列。Bigtable提供查找特定key的数据、遍历一段key范围所有的key-value对的接口。在内部，每个SSTable包含一系列块（一般每个块为64KB，可配）。一个块的索引（在SSTable的最后进行存储）被用来对block进行定位；当SSTable打开时，索引被加载进内存。一次查找仅仅需要一次磁盘查询：首先我们通过对内存索引的二分查找确定合理的块，其次从磁盘读取合适的块。一个SSTable也可以全部加载到内存中，这样遍历和查找就可以不用访问内存。
 
 Bigtable依赖高可用和持久性的分布式锁服务Chubby。一个 Chubby服务包含5个有效的节点。一个会被选举为master并响应外部请求。当大多数节点存活并且能相互交互时服务就可用。Chunbby使用Paxos算法来保证节点异常时所有备份数据的一致性。Chubby提供包括目录和小文件的命名空间。每个目录或者文件可以被当作锁，对齐进行读和写都是原子。Chubby client库对Chubby文件提供一致性缓存。每个chubby client于chubby 服务之间都维护了一个session。一个client的会话在租约过期时间间隔内如果未能及时更新session租约时 会过期。当一个client的会话过期，该client将失去所有的锁和打开的句柄。chubby也能对chubby文件或者目录注册回调函数来及时更新自己维护的状态或者会话过期。
 
-Bigtable使用Chubby来完成很多任务： 保证系统任何时刻最多只有一个有效的Master；保存Bigtable引导位置的数据（见5.1）；发现tablet servers上线以及确定tablet server的死亡（5.2）；存储Bigtable的概要数据（每个表列族信息）；and to store access control
+Bigtable使用Chubby来完成很多任务： 【锁能力】保证系统任何时刻最多只有一个有效的Master；【存储能力】保存Bigtable引导位置的数据（见5.1）；【锁能力】发现tablet servers上线以及确定tablet server的死亡（5.2）；【存储能力】存储Bigtable的概要数据（每个表列族信息）；【存储能力】存储访问控制列表。如果Chubby一段时间变得不可用，Bigtable也会服务对外提供服务。我们最近在跨越11个chubby服务实例的14个Bigtable集群进行评测。由于Chubby不可用导致的Bigtable中的一些数据不可用的平均时常比例为0.0047%（这些不可用或者是由于Chubby不可用或者网络问题）。单个集群被影响的时常占比大致为0.0326%。
 
+# 5 实现
+Bigtable的实现由三个主要部分组长：嵌入client端的库，一个Master服务，部署于多节点的Tablet服务。Tablet服务可以动态的加入（移除）集群来适应工作负载的变化。
 
+master负责:1. tablet到tablet 服务的分配;2. 检测tablet服务的添加和过期;3. 平衡各个tablet服务的负载;4. 回收GFS文件;5. 同时也负责处理类似表或者列族创建这类schema变化。
+
+每个tablet Each tablet server manages a set of tablets
 
 
 
