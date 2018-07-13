@@ -62,8 +62,8 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
 
 我们现在更加详细的描述事务协议。表4展示了事务执行期间Percolator数据和元数据的布局，这些不同的元数据列被系统按照表5的形式使用。
 ![事务样例1](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A1.png)
+
 ![事务样例2](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A11.png)
-![状态描述]
 ```
     图4注解：
     各列的含义见图5注解
@@ -82,6 +82,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
     5. 	事务对Joe执行类似的操作，即删除lock列startStamp时间点的主锁信息，然后增加新的commitStamp时间点数	
     	据，即：write列:(8,数据写入的时间戳)，lock列：空，data列：空。
 ```
+
 ![注释](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/Bittable%E5%88%97%E4%B8%AD%E4%BB%A3%E8%A1%A8Percolator%E5%88%97%E7%9A%84%E4%BB%A5C%E5%91%BD%E5%90%8D.png)
 ```
     图5注解：
