@@ -28,6 +28,36 @@ Bigtable按照行关键字的字典序维护数据。一张完整的表是按照
 
 `访问控制，磁盘和内存统计都是按照列族为单位实施的`。在我们的Webtable例子中，这些控制允许我们管理几种不同类型的应用：比如添加新的基础数据，读基础的数据并且创建扩展的列族，一些仅仅允许读取已经存在的数据（甚至由于隐私原因对所有现存的列族都没有只读权限）
 
+## 2.3 时间戳
+
+Bigtable的每个单元都可能包含一份数据的多个版本；这些版本通过时间戳来索引。Bigtable 时间戳是一个64位整数。可以通过Bigtable来进行分配，这种情况下其代表微秒级别的“实时时间”，当然也可以直接通过client端来指定。应用程序必须自身保证生成唯一的时间戳避免发生冲突。一个cell数据的不同版本按照降序进行存储，所以最新的数据会被最先读到。
+
+为了让多版本数据管理尽量简单，Bigtable支持自动回收cell的过期版本，目前Bigtable支持per-column-family粒度的两种配置方式：client可以通过配置保留cell的最近N个版本或者足够新的版本(只保留最近几天写的数据)。
+
+在我们的Webtable样例中，我们将爬取的数据的时间戳设置在Contents列族：对应这些版本的数据真实爬取的时间。上文描述的垃圾回收机制让我们对每个网页只保留最新的若干个版本。
+
+# 3 API
+Bigtable的API提供了创建、删除 表和列族的函数。 并且提供了替换 集群，表，列族 元数据的函数，比如访问权限等等。
+
+Client应用程序可以写或者删除Bigtable中的数据，从特定的行查找数据，或者遍历表中的一部分数据。表2展示了 使用RowMutation抽象接口提供一系列更新的C++代码。（为了使样子足够简单不相关的细节被忽略）。Apply接口的调用在Webtable上执行一个原子修改：向www.cnn.com 添加了一个anchor并且删除了不同的anchor。
+![Bigtable操作API](https://github.com/sandszhouSZ/PaperTranslate/blob/master/image/Bigtable%E6%93%8D%E4%BD%9C.png)
+
+表3展示了利用Scanner抽象接口去遍历特定行的所有anchors的c++代码片段，这里有几种限制行、列，时间戳的机制。比如，我们可以通过约束只返回匹配正则表达式anchor:*.cnn.com的anchors 或者 只返回timestamp落在十天内的anchors。
+
+Bigtable支持其他的一些特性以便用户可以以非常复杂的方式操作数据。`首先，虽然Bigtable提供多行间批量写的接口`，`Bigtable也支持单行的原子事务，这可以被用来允许Client执行单行key下的原子的读-修改-写操作序列`。另外，`Bigtable允许cell被按照整数计数器去使用`。最后`，Bigtable支持client端的脚本在节点地址空间中执行`，这些脚本是用 Google专门处理数据的语言Sawzall进行编码。当前，我们基于Sawzall的API不允许客户端回写Bigtable，但是允许很多形式的数据转换，基于任意表达式的过滤，经过很多操作级联的概括。
+
+Bigtable可以和MapReduce一起使用来进行Google的大规模并行计算。我们已经编写了很多封装来让Bigtable可以被当作输入源同时作为MapReduce任务的输出结果。
+
+## 4 创建块
+Bigtable构建在其他的一些Google基础设施之上。Bigtable使用分布式文件系统GFS来存储数据文件。一个Bigtable集群一般运行于一组共享的机器池中为大量的不同业务场景的应用提供服务。并且Bigtable进程和其他应用进程共享机器。Bigtable依赖一个集群管理系统进行任务调度，资源管理，状态监控。
+
+Google SSTable文件格式被用于存储Bigtable数据。一个SSTable提供一个持久的，有序的不可更改的从key到value的映射，其中key和value都是任意的字节序列。Bigtable提供查找特定key的数据、遍历一段key范围所有的key-value对的接口。在内部，每个SSTable包含一系列块（一般每个块为64KB，可配）。一个块的索引（在SSTable的最后进行存储）被用来对block进行定位；当SSTable打开时，索引被加载进内存。一次查找仅仅需要一次磁盘查询：首先我们通过对内存索引的二分查找确定合理的块，其次从磁盘读取合适的块。一个SSTable也可以全部加载到内存中，这样遍历和查找就可以不用访问内存。
+
+Bigtable依赖高可用和持久性的分布式锁服务Chubby。一个 Chubby服务包含5个有效的节点。一个会被选举为master并响应外部请求。当大多数节点存活并且能相互交互时服务就可用。Chunbby使用Paxos算法来保证节点异常时所有备份数据的一致性。Chubby提供包括目录和小文件的命名空间。每个目录或者文件可以被当作锁，对齐进行读和写都是原子。Chubby client库对Chubby文件提供一致性缓存。每个chubby client于chubby 服务之间都维护了一个session。一个client的会话在租约过期时间间隔内如果未能及时更新session租约时 会过期。当一个client的会话过期，该client将失去所有的锁和打开的句柄。chubby也能对chubby文件或者目录注册回调函数来及时更新自己维护的状态或者会话过期。
+
+Bigtable使用Chubby来完成很多任务： 保证系统任何时刻最多只有一个有效的Master；保存Bigtable引导位置的数据（见5.1）；发现tablet servers上线以及确定tablet server的死亡（5.2）；存储Bigtable的概要数据（每个表列族信息）；and to store access control
+
+
 
 
 
