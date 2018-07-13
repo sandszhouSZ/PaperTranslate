@@ -5,3 +5,4 @@
 - 分布式存储 http://loopjump.com/nosql_survey_note/
 - https://github.com/guodongxiaren/README#%E9%93%BE%E6%8E%A5
 - Dapper分布式追踪系统 http://bigbully.github.io/Dapper-translation/
+- 学习链 https://github.com/xingshaocheng/architect-awesome/blob/master/README.md#hbase
