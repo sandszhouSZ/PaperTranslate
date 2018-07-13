@@ -30,7 +30,7 @@ Percolator是专门为增量处理而创建，并不是为了取代大多数已�
 
 为了在海量场景下处理增量计算，Percolator提供两个主要的抽象:  $基于随机访问场景的ACID事务$；$观察者，一种组织增量计算的方式$。
 
-一个Percolator系统在集群每台机器上包含三个二进制：$\color{red}一个Percolator worker$，$\color{red}一个Bittable tablet  server$，$\color{red}一个GFS chunkserver$。所有的观察者链接到Percolator worker，该worker扫描Bigtable以查找已更改的列(通知)并且以Percolator worker进程中函数调用的方式调用对应的观察者。观察者通过与Bittable tablet servers进行读/写 RPCS通信的方式执行事务，Bittable tablet servers同样与GFS chunkservers进行读/写 RPCS通信进行交互。该系统依赖两个小的服务： $\color{red}时钟服务$和$\color{red}轻量级锁服务$。 时钟服务提供严格意义上单调递增的时间戳：快照隔离协议的正确操作时序需要用到该属性。percolator worker使用轻量级的锁服务来更有效率的查找脏通知。
+一个Percolator系统在集群每台机器上包含三个二进制：![#f03c15](https://placehold.it/15/f03c15/000000?text=+) `一个Percolator worker`，$\color{red}一个Bittable tablet  server$，$\color{red}一个GFS chunkserver$。所有的观察者链接到Percolator worker，该worker扫描Bigtable以查找已更改的列(通知)并且以Percolator worker进程中函数调用的方式调用对应的观察者。观察者通过与Bittable tablet servers进行读/写 RPCS通信的方式执行事务，Bittable tablet servers同样与GFS chunkservers进行读/写 RPCS通信进行交互。该系统依赖两个小的服务： $\color{red}时钟服务$和$\color{red}轻量级锁服务$。 时钟服务提供严格意义上单调递增的时间戳：快照隔离协议的正确操作时序需要用到该属性。percolator worker使用轻量级的锁服务来更有效率的查找脏通知。
 ![整体架构](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E6%9E%B6%E6%9E%84.png)
 从程序员的视角，一个Percolator存储包含少量的表。每个表包含一系列按照行和列索引的“cells”。每个cell包含一个值：一个封装的字节数组。（实际上，为了支持快照隔离，我们将每个cell实现为一系列通过时间戳索引的数值）
 
