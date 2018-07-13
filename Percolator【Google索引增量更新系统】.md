@@ -60,7 +60,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
 
 然而，部署Percolator的任何Client节点都可以执行对Bigtable表中的状态修改：没有一个合适的地方拦截通信并分配锁。这样，Percolator必须显式的维护锁。`锁必须在节点异常期间一直存在`:如果一个锁在提交的两个阶段之间丢失，系统会错误的提交两个可能存在冲突的事务;`锁服务必须提供高吞吐`:数千台机器将会同时申请锁。`锁服务也必须低延迟`:每个Get()操作除了读取数据也要读锁，我们希望最小化延迟。基于这些约束，锁服务需要有多副本（去单），分布式，负载均衡（均分负载），写到一个持久化数据存储中。Bigtable本身符合所有的这些需求 ，所以Percolator将锁存储在相关Bigtable特定的内存列，当访问某一行数据时在Bigtable的行事务中读取锁或者修改锁。
 
-我们现在更加详细的描述事务协议。表4展示了事务执行期间Percolator数据和元数据的布局，这些不同的元数据列被系统按照表5的形式使用。事务的构造需要访问timestamp服务获取一个开始时间戳（line 6），该值决定了Get()操作可以看到的一致性快照。Set()操作会本地buffer（line 7）直到最后进行提交。提交buffer缓冲的数据是一个两阶段步骤，这两个阶段需要通过client进行协调。不同节点间的事务通过Bigtable 分片tablet节点间的行事务来完成。
+我们现在更加详细的描述事务协议。表4展示了事务执行期间Percolator数据和元数据的布局，这些不同的元数据列被系统按照表5的形式使用。
 ![事务样例1](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A1.png)
 ![事务样例2](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A11.png)
 ![状态描述]
@@ -82,7 +82,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
     5. 	事务对Joe执行类似的操作，即删除lock列startStamp时间点的主锁信息，然后增加新的commitStamp时间点数	
     	据，即：write列:(8,数据写入的时间戳)，lock列：空，data列：空。
 ```
-(https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/Bittable%E5%88%97%E4%B8%AD%E4%BB%A3%E8%A1%A8Percolator%E5%88%97%E7%9A%84%E4%BB%A5C%E5%91%BD%E5%90%8D.png)
+![注释](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/Bittable%E5%88%97%E4%B8%AD%E4%BB%A3%E8%A1%A8Percolator%E5%88%97%E7%9A%84%E4%BB%A5C%E5%91%BD%E5%90%8D.png)
 ```
     图5注解：
     图5的c以及图4的bal标识Bigtable中存储的代表Percolator的列，Percolator包含3列：data，write，lock
@@ -95,7 +95,7 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
     notify列：观察者需要执行
     ack_O列：观察者O已经执行；存储上次成功运行的开始时间戳
 ```
-下面是展示了Percolator的伪代码。
+下面是展示了Percolator的伪代码，事务的构造需要访问timestamp服务获取一个开始时间戳（line 6），该值决定了Get()操作可以看到的一致性快照。Set()操作会本地buffer（line 7）直到最后进行提交。提交buffer缓冲的数据是一个两阶段步骤，这两个阶段需要通过client进行协调。不同节点间的事务通过Bigtable 分片tablet节点间的行事务来完成
 ```
     伪代码如下所示：
     
