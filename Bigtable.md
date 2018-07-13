@@ -62,7 +62,29 @@ Bigtable的实现由三个主要部分组长：嵌入client端的库，一个Mas
 
 master负责:1. tablet到tablet 服务的分配;2. 检测tablet服务的添加和过期;3. 平衡各个tablet服务的负载;4. 回收GFS文件;5. 同时也负责处理类似表或者列族创建这类schema变化。
 
-每个tablet Each tablet server manages a set of tablets
+每个tablet 服务管理了一系列分片（每个tablet server管理数十个到上千个分片）。tablet服务处理其加载的tablet上的读和写请求并在分片太大时进行分类。
 
+像很多其他单Master的分布式存储系统，client不能将master作为数据流的关键路径：clients 直接和分片服务交互进行读和写操作。因为Bigtable并不依靠master节点去定位分片的位置，大多数client永远不用和master服务交互。所以，master实际上负载非常轻。
 
+一个Bigtable集群存储了很多表。每个表包括一系列分片，每个分片包含了一段连续范围行上的所有数据。开始，每个表仅仅包含一个分片。当表逐步增大，会自动的分裂为多个分片，每个分片一般在100-200MB之间。
 
+## 5.1 分片定位
+我们使用一个三层的类B+树结构去存储分片定位的信息（表4）。
+![定位](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/Bigtable%E5%AE%9A%E4%BD%8D.png)
+```
+图示解读：
+Bigtable分片的存储是是全局表映射管理。
+
+对于索引来讲，一个分片就是一个表，所以这里根表 = 根分片。
+
+chubby文件中保存了Bigtable根表的位置，该根表（METADATA表/根分片/128MB）存储于GFS中，索引了GFS系统所有分片的位置信息；
+加载该根表后，大概包含了128K个二级表（二级分片 / METADATA表），其都存储于GFS系统中；
+加载一个二级分片表后，其内部又包含了128KB个用户分片（每个表分裂的的分片）；
+
+```
+第一层是根分片的位置，其作为一个文件存储在Chubby中。根分片在一个特殊的METADATA表中存储了所有分片的位置信息。每个METADATA分片包含了一系列用户分片。
+根分片是METADATA表中的第一个分片，其特殊性在于永远不会分裂，这样可以保证分片定位的层次不会超过3层。
+
+METADATA表 用以存储分片的位置，其`行key是通过该分片表的标识符和结束行编码而来`。每个METADATA行在内存占用大致1KB的数据量。假定将METADATA表的内存限制在128MB，我们的三层定位架构可以有效的支持2的34次方（16GB）个分片（在分片大小为128MB时，存储容量为2的61次方的字节量 = 2EB）。
+
+The client library caches
