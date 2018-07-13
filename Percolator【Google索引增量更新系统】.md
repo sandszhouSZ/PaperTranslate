@@ -61,8 +61,8 @@ Percolator利用Bigtable中的时间戳维度对每份数据存储多个版本�
 然而，部署Percolator的任何Client节点都可以执行对Bigtable表中的状态修改：没有一个合适的地方拦截通信并分配锁。这样，Percolator必须显式的维护锁。`锁必须在节点异常期间一直存在`:如果一个锁在提交的两个阶段之间丢失，系统会错误的提交两个可能存在冲突的事务;`锁服务必须提供高吞吐`:数千台机器将会同时申请锁。`锁服务也必须低延迟`:每个Get()操作除了读取数据也要读锁，我们希望最小化延迟。基于这些约束，锁服务需要有多副本（去单），分布式，负载均衡（均分负载），写到一个持久化数据存储中。Bigtable本身符合所有的这些需求 ，所以Percolator将锁存储在相关Bigtable特定的内存列，当访问某一行数据时在Bigtable的行事务中读取锁或者修改锁。
 
 我们现在更加详细的描述事务协议。表4展示了事务执行期间Percolator数据和元数据的布局，这些不同的元数据列被系统按照表5的形式使用。
-![事务样例1](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A1.png)
 
+![事务样例1](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A1.png)
 ![事务样例2](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E4%BA%8B%E5%8A%A11.png)
 ```
     图4注解：
