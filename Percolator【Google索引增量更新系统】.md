@@ -22,16 +22,16 @@
 
 除了关于并发性的考虑，增量系统的工程师需要对增量计算的状态进行追踪。Percolator提供观察者：当用户自定义列发生变化时，系统会调用特定代码片段并通知给用户。Percolator应用程序按照一系列观察者结构化为一个整体；每个观察者完成一个任务同时通过写BitTable来唤醒下游的观察者来执行新的任务。最开始时，一个外部的进程通过向Bigtabal写初始数据来触发调用链的第一个观察者。
 
-Percolator是专门为增量处理而创建，并不是为了取代大多数已经存在的数据处理方案。\color{red}结果不能分割为小的更新的计算(比如对文件排序)更适合采用MapReduce。而且\color{red}计算应该具有很强的一致性需求，否则Bigtable已经足够。最后，\color{red}计算量应该在某些维度(总的数据量、CPU消耗)非常大；不适合MapReduce或者Bigtable的小的计算可以考虑传统的DBMS系统。
+Percolator是专门为增量处理而创建，并不是为了取代大多数已经存在的数据处理方案。$\color{red}结果不能分割为小的更新的计算(比如对文件排序)$更适合采用MapReduce。而且$\color{red}计算应该具有很强的一致性需$求，否则Bigtable已经足够。最后，$color{red}计算量应该在某些维度(总的数据量、CPU消耗)非常大$；不适合MapReduce或者Bigtable的小的计算可以考虑传统的DBMS系统。
 
 在Google内部，Percolator的第一个应用案例是将新爬取网页融合进实时网页搜索索引中。通过将索引系统切换到增量系统，我们可以在网页爬取后及时更新到现有搜索索引中。新方案将平均文档处理延迟降低了100倍，搜索结果返回的文档的平均年龄下降了50%(搜索结果中网页的年龄除过包含索引外，还包含文档爬取到文档修改之间的时间差)。该系统另外用于将页面渲染成图片；Percolator跟踪网页和其依赖资源的的关联关系，所以当依赖的资源发生变化时，网页也会重新得到处理。
 
 # 2 设计
 
-为了在海量场景下处理增量计算，Percolator提供两个主要的抽象:  基于随机访问场景的ACID事务；观察者，一种组织增量计算的方式。
+为了在海量场景下处理增量计算，Percolator提供两个主要的抽象:  $基于随机访问场景的ACID事务$；$观察者，一种组织增量计算的方式$。
 
-一个Percolator系统在集群每台机器上包含三个二进制：\color{red}一个Percolator worker，\color{red}一个Bittable tablet  server，\color{red}一个GFS chunkserver。所有的观察者链接到Percolator worker，该worker扫描Bigtable以查找已更改的列(通知)并且以Percolator worker进程中函数调用的方式调用对应的观察者。观察者通过与Bittable tablet servers进行读/写 RPCS通信的方式执行事务，Bittable tablet servers同样与GFS chunkservers进行读/写 RPCS通信进行交互。该系统依赖两个小的服务： \color{red}时钟服务和\color{red}轻量级锁服务。 时钟服务提供严格意义上单调递增的时间戳：快照隔离协议的正确操作时序需要用到该属性。percolator worker使用轻量级的锁服务来更有效率的查找脏通知。
-
+一个Percolator系统在集群每台机器上包含三个二进制：$\color{red}一个Percolator worker$，$\color{red}一个Bittable tablet  server$，$\color{red}一个GFS chunkserver$。所有的观察者链接到Percolator worker，该worker扫描Bigtable以查找已更改的列(通知)并且以Percolator worker进程中函数调用的方式调用对应的观察者。观察者通过与Bittable tablet servers进行读/写 RPCS通信的方式执行事务，Bittable tablet servers同样与GFS chunkservers进行读/写 RPCS通信进行交互。该系统依赖两个小的服务： $\color{red}时钟服务$和$\color{red}轻量级锁服务$。 时钟服务提供严格意义上单调递增的时间戳：快照隔离协议的正确操作时序需要用到该属性。percolator worker使用轻量级的锁服务来更有效率的查找脏通知。
+![整体架构](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/%E6%9E%B6%E6%9E%84.png)
 从程序员的视角，一个Percolator存储包含少量的表。每个表包含一系列按照行和列索引的“cells”。每个cell包含一个值：一个封装的字节数组。（实际上，为了支持快照隔离，我们将每个cell实现为一系列通过时间戳索引的数值）
 
 Percolator的设计受到大规模和对低延迟不敏感这两个需求的影响。对延迟的容忍可以让我们采用一些简单懒惰的策略：比如当事务在某些节点执行失效延迟清理未释放锁。这种懒惰的、易实现的方式会导致事务提交延迟数十秒。这种延迟在执行OLTP任务的DBMS系统中是不能允许的，但是这在构建网页增量索引的处理系统中是可以容忍的。Percolator没有事务管理的中控节点；而且没有全局死锁检测。这样会增加冲突事务的延迟，但是却允许系统扩展到数千台节点。
