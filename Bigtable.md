@@ -55,7 +55,7 @@ Google SSTable文件格式被用于存储Bigtable数据。一个SSTable提供一
 
 Bigtable依赖高可用和持久性的分布式锁服务Chubby。一个 Chubby服务包含5个有效的节点。一个会被选举为master并响应外部请求。当大多数节点存活并且能相互交互时服务就可用。Chunbby使用Paxos算法来保证节点异常时所有备份数据的一致性。Chubby提供包括目录和小文件的命名空间。每个目录或者文件可以被当作锁，对齐进行读和写都是原子。Chubby client库对Chubby文件提供一致性缓存。每个chubby client于chubby 服务之间都维护了一个session。一个client的会话在租约过期时间间隔内如果未能及时更新session租约时 会过期。当一个client的会话过期，该client将失去所有的锁和打开的句柄。chubby也能对chubby文件或者目录注册回调函数来及时更新自己维护的状态或者会话过期。
 
-Bigtable使用Chubby来完成很多任务： 【锁能力】保证系统任何时刻最多只有一个有效的Master；【存储能力】保存Bigtable引导位置的数据（见5.1）；【锁能力】发现tablet servers上线以及确定tablet server的死亡（5.2）；【存储能力】存储Bigtable的概要数据（每个表列族信息）；【存储能力】存储访问控制列表。如果Chubby一段时间变得不可用，Bigtable也会服务对外提供服务。我们最近在跨越11个chubby服务实例的14个Bigtable集群进行评测。由于Chubby不可用导致的Bigtable中的一些数据不可用的平均时常比例为0.0047%（这些不可用或者是由于Chubby不可用或者网络问题）。单个集群被影响的时常占比大致为0.0326%。
+Bigtable使用Chubby来完成很多任务： 【锁能力】保证系统任何时刻最多只有一个有效的Master；【存储能力】保存Bigtable引导位置的数据（见5.1）；【锁能力】发现tablet servers上线以及确定tablet server的死亡（5.2）；【存储能力】存储Bigtable的概要数据（每个表列族信息）；【存储能力】存储访问控制列表。如果Chubby一段时间变得不可用，Bigtable对外提供的服务也会受到影响。我们最近在跨越11个chubby服务实例的14个Bigtable集群进行评测。由于Chubby不可用导致的Bigtable中的一些数据不可用的平均时常比例为0.0047%（这些不可用或者是由于Chubby不可用或者网络问题）。单个集群被影响的时常占比大致为0.0326%。
 
 # 5 实现
 Bigtable的实现由三个主要部分组长：嵌入client端的库，一个Master服务，部署于多节点的Tablet服务。Tablet服务可以动态的加入（移除）集群来适应工作负载的变化。
@@ -87,4 +87,39 @@ chubby文件中保存了Bigtable根表的位置，该根表（METADATA表/根分
 
 METADATA表 用以存储分片的位置，其`行key是通过该分片表的标识符和结束行编码而来`。每个METADATA行在内存占用大致1KB的数据量。假定将METADATA表的内存限制在128MB，我们的三层定位架构可以有效的支持2的34次方（16GB）个分片（在分片大小为128MB时，存储容量为2的61次方的字节量 = 2EB）。
 
-The client library caches
+client端缓存了分片的位置。如果一个client不知道分片的位置或者发现缓存的分片位置信息不正确，其会递归的逐层同步分片位置信息。如果一个client的缓存为空，位置查找算法需要3个网络交互，包括从chubby的一次读。如果client的cache失效，位置查找算法可能需要6次网络交互，因为过期的缓存项只有在不命中时才会发现（假定METADATA分片不会平凡的移动）。由于分片位置在内存中进行存储所以不用访问再GFS，我们另外通过client库的预取算法在一般情况下可以节省更多时间：当读取METADATA表时，读取更多的分片。
+
+我们也在METADATA表中存储其他附属信息，包括每个分片相关的所有事件的日志（比如当一个服务节点开始使用该分片）。这种信息对调试和性能分析非常会非常有帮助。
+
+## 5.2 分片分配
+Master行为：`需要及时探测到server不再对分片提供服务的异常并且及时将这些分片分配给其他节点`。为了探测到节点异常，master周期性的查询每个tablet server的锁状态。如果一个tablet server向master上报锁丢失或者master在经过几次重试后仍然无法和tablet server完成交互，master会尝试获取该tablet server的文件的排他锁。如果master成功获取到锁则表明：chubby服务是存活的并且tablet server或者死亡或者无法连接到chubby，所以master通过删除该tablet server的chubby 文件来确保该tablet server无法继续再提供服务。一旦一个tablet server的锁文件被删除，master就可以将之前分片给该tablet server的所有分片分配到`未分配集合`中。为了保证master和chubby服务之间不会有网络问题，如果master的chubby会话过期会杀死自己。但是如上描述，master的失败不会影响到tablet分片到tablet server的分片。
+
+当一个master被集群管理系统启动，master需要发现当前的tablet分片的分布情况。master启动时会执行下面的步骤：（1） master从chubby服务上获取一个独特的master 锁来防止多个master同时启动。 （2） master扫描chubby上的tablet server目录拉获取当前存储的服务节点列表。 （3） master和每一个tablet server进行通信来确定每个tablet server管理的tablet分片集合。 （4）master 扫描METADATA表发现了解总的分片集合。 当扫描到某一个没有被分配出去的分片时，master将该分片加入到未分配分片集合中，这样这个分片可以被用户后续的节点间分配。
+
+一个复杂性在于只有METADATA分片已经被分片后，METADATA表才能被扫描。因此，如果master在第3部没有发现根分片已经被分配给某一个tablet server，在第4部之前master会将根分片分配给`未分配分片集合`。这样确保根分片会被分配给某个tablet server。因为根分片包含了所有METADATA分片的名字，master在扫描根分片后就知道了所有的METADATA分片。
+
+只有当: (1) 一个表在创建或者删除时、（2） 两个已经存在的分片合并为一个更大的分片、（3） 一个已经存在的分片分裂为两个较小的分片 时存活的分片集合才会发生变化。因为master会初始化所有的分片所以其可以对这些变化进行跟踪。一个tablet server通过在METADATA表中添加一个新的分片记录信息来提交分片分裂行为。当分裂已经提交成功时会触发master。 假如该通知发生丢失（由于tablet server或者由于master死亡，此时master不知道该分裂信息），master在命令tablet serve去加载其刚分裂的分片时会重新探测到这个新的分片。这是因为：tablet server发现在master命令其加载的METADATA表的tablet项只配置了一部分分片时tablet server会将分裂信息通知master。
+
+## 5.3 分片服务
+分片的持久状态存储在GFS中，如下表5所示。更新操作会被提交到一个提交日志用来存储redo记录。对一批更新，最新提交的更新在内存中一个排序的buffer（memtable）中进行存储；旧的更新存储在一系列SSTable中。为了恢复分片，一个分片服务首先从METADATA表中读取该分片tablet的元数据。这个metadata包含了`组成该分片tablet的一系列SSTable文件`和`一系列redo点（一套恢复点）`，该redo点是包含tablet数据的一个提交文件位置指针。server服务首先将SSTables的索引加载到内存并通过重新执行截止redo点时已提交的更新来重建出memtable。
+![格式](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/tablet%E6%A0%BC%E5%BC%8F.png)
+
+【写请求】当tablet server收到一个写请求，首先会对格式进行检查，并且确认client端有执行写的权限。tablet server通过读代表权限的chubby文件（该文件总是缓存在Chubby的client cache中）来获得可写权限的client节点列表通过匹配进行权限检查。一个有效的修改操作会被写到一个提交日志中。组提交可以用来提升大量小修改操作时系统的性能，内容会被插入到内存有序buffer中(memtable中)。
+
+【读请求】当tablet server收到一个读请求，首先会执行相似的格式检查和权限检查。tablet server通过对一系列SSTable和内存有序buffer的读合并来完成应用层一个有效的读操作。由于SSTable和memtable都是字典序存储的数据结构，合并可以非常高效的进行。
+
+在tablet分片进行分裂或者合并的同时新的读和写操作可以正常进行。
+
+##5.4 压缩
+关键词：次要压缩（minor compacton） 和 合并压缩（merge compaction） 和 主要压缩 （major compaction）
+随着写操作的不断执行memtable逐步增大，当memtable增大到一个阈值，该memtable会被冻结同时创建出一个新的memtable。冻结的memtable会异步转化为一个SSTable并且会写入到GFS中，同时SSTable的索引写入到METADATA分片中，称之为：minor compaction（次要压缩）。次要压缩有两个目标：(1) 减少tablet server的内存使用；（2）当该节点挂掉恢复时节省其从commit日志读取的数据的量。新的读和写请求在合并的同时不会受到影响。
+
+每个次要压缩会创建一个新的SSTable。如果这种情况持续不加控制，读操作可能需要合并任意数量的SSTable。所以，我们通过在后台周期性的执行合并压缩来限制SSTable的数量。一个合并压缩过程为：读取一些SSTables的内容和memtable，然后写入到一个新的SSTable中。输入SSTable和memtable在合并结束后可以删除。
+
+将所有SSTables转为只有1个SSTable的合并压缩称为：主要压缩。由非主要压缩产生的SSTable文件可能包含很多特殊的删除项，这些删除项使得仍然有效的更旧的SSTable中仍然有效的数据可以延期被清理（说人话就是： 更旧的SSTable包含一项有效的，在后来合并的SSTable中该项被删除了，此时新的SSTable仅仅包含一个删除标志）。相对而言，主要合并会产生一个不包含删除数据的干净的SSTable。Bigtable会在后台周期性的遍历所有的tablets文件并且实施主要压缩。
+这些主要压缩使得Bigtable可以及时回收删除数据占用的资源，并且确保被删除的数据可以及时的从系统中消失，这对面向敏感数据的业务非常重要。
+
+
+
+
+
