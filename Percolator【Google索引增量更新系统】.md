@@ -1,5 +1,5 @@
 # 利用分布式事务和通知机制的大规模增量索引处理
-![原文](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/Percolator%E3%80%90Google%E7%B4%A2%E5%BC%95%E5%A2%9E%E9%87%8F%E6%9B%B4%E6%96%B0%E7%B3%BB%E7%BB%9F%E3%80%91.md)
+[原文](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/Percolator%E3%80%90Google%E7%B4%A2%E5%BC%95%E5%A2%9E%E9%87%8F%E6%9B%B4%E6%96%B0%E7%B3%BB%E7%BB%9F%E3%80%91.md)
 # 摘要
 
 当新爬取的文档加入系统时，需要持续的对当前已有的海量存储文档进行更新。这项利用小量的、独立增量数据对大量数据进行更新的任务是数据处理的一类典型例子。这项任务的技术选型取决于底层存储数据的基础设施。数据库在存储量以及吞吐上显然无法满足这类任务:Google's 索引系统在数千台机器上存储了数十PB达到数据并且每天处理数十亿计的更新。MapReduce以及其他批处理系统由于注重效率更适合创建大批量并发执行的任务，也不适合处理各别的小的更新。
