@@ -156,7 +156,7 @@ client端可以控制SSTables是否对一个局部组进行压缩以及使用哪
 关键词：次要压缩，停止提供服务，次要压缩，卸载
 如果master将一个tablet从一个server迁移到另一个server，(1） 源tablet server首先对该tablet做一个次要压缩，这个压缩可以减少tablet server的提交日志中未提交状态的日志数量。(2) 当次要压缩结束后，tablet server将停止对该tablet提供读写服务。(4) 在他最终将该tablet分片卸载之前。 (3) 其会在做一个次要压缩来减少提交日志中未提交的日志数量（这批日志是在第一次压缩过程中新来的写请求，数据量非常少，所以很快）。当第二次次要压缩结束后，tablet可以被另外一个tablet server接管并且不需要从日志文件中进行恢复。
 
-## 6.6 
+## 6.6 不变形利用
 除了SSTable的cache，很多来自Bigtable系统其他部分都有一个简单的共性：我们产生的所有SSTable都是不可修改的。比如在从SSTable读取数据时我们不需要任何到文件系统的同步访问（说人话就是：不用读盘产生IO，缓存也可以用，因为底层都是只读的）。这样，多行的并发控制可以高效的实现。唯一可以被读操作和写操作可以访问到并且可能修改的数据结构是memtable。为了减少读memtable的冲突，我们对memtable中每个行的修改都执行 copy-and-write，允许读和写并发访问数据。
 
 由于SSTable不能修改，物理上永久删除已经被业务删除的数据的问题将转变为过期SSTable的垃圾回收。每个tablet分片的SSTable都在METAData表中有注册。master
