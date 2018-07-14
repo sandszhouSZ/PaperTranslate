@@ -1,5 +1,5 @@
 # 利用分布式事务和通知机制的大规模增量索引处理
-[原文地址](https://static.googleusercontent.com/media/research.google.com/zh-CN//pubs/archive/36726.pdf)
+
 
 # 摘要
 
