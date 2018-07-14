@@ -110,14 +110,15 @@ Master行为：`需要及时探测到server不再对分片提供服务的异常�
 
 在tablet分片进行分裂或者合并的同时新的读和写操作可以正常进行。
 
-## 5.4 压缩
-关键词：次要压缩（minor compacton） 和 合并压缩（merge compaction） 和 主要压缩 （major compaction）
-随着写操作的不断执行memtable逐步增大，当memtable增大到一个阈值，该memtable会被冻结同时创建出一个新的memtable。冻结的memtable会异步转化为一个SSTable并且会写入到GFS中，同时SSTable的索引写入到METADATA分片中，称之为：minor compaction（次要压缩）。次要压缩有两个目标：(1) 减少tablet server的内存使用；（2）当该节点挂掉恢复时节省其从commit日志读取的数据的量。新的读和写请求在合并的同时不会受到影响。
+## 5.4 紧凑
+关键词：紧凑：compacton；压缩：compression；合并：merge
+关键词：次要紧凑（minor compacton） 和 合并紧凑（merge compaction） 和 主要紧凑 （major compaction）
+随着写操作的不断执行memtable逐步增大，当memtable增大到一个阈值，该memtable会被冻结同时创建出一个新的memtable。冻结的memtable会异步转化为一个SSTable并且会写入到GFS中，同时SSTable的索引写入到METADATA分片中，称之为：minor compaction（次要紧凑）。次要紧凑有两个目标：(1) 减少tablet server的内存使用；（2）当该节点挂掉恢复时节省其从commit日志读取的数据的量。新的读和写请求在合并的同时不会受到影响。
 
-每个次要压缩会创建一个新的SSTable。如果这种情况持续不加控制，读操作可能需要合并任意数量的SSTable。所以，我们通过在后台周期性的执行合并压缩来限制SSTable的数量。一个合并压缩过程为：读取一些SSTables的内容和memtable，然后写入到一个新的SSTable中。输入SSTable和memtable在合并结束后可以删除。
+每个次要紧凑会创建一个新的SSTable。如果这种情况持续不加控制，读操作可能需要合并任意数量的SSTable。所以，我们通过在后台周期性的执行合并紧凑来限制SSTable的数量。一个合并紧凑过程为：读取一些SSTables的内容和memtable，然后写入到一个新的SSTable中。输入SSTable和memtable在合并结束后可以删除。
 
-将所有SSTables转为只有1个SSTable的合并压缩称为：主要压缩。由非主要压缩产生的SSTable文件可能包含很多特殊的删除项，这些删除项使得仍然有效的更旧的SSTable中仍然有效的数据可以延期被清理（说人话就是： 更旧的SSTable包含一项有效的，在后来合并的SSTable中该项被删除了，此时新的SSTable仅仅包含一个删除标志）。相对而言，主要合并会产生一个不包含删除数据的干净的SSTable。Bigtable会在后台周期性的遍历所有的tablets文件并且实施主要压缩。
-这些主要压缩使得Bigtable可以及时回收删除数据占用的资源，并且确保被删除的数据可以及时的从系统中消失，这对面向敏感数据的业务非常重要。
+将所有SSTables转为只有1个SSTable的合并紧凑称为：主要紧凑。由非主要紧凑产生的SSTable文件可能包含很多特殊的删除项，这些删除项使得仍然有效的更旧的SSTable中仍然有效的数据可以延期被清理（说人话就是： 更旧的SSTable包含一项有效的，在后来合并的SSTable中该项被删除了，此时新的SSTable仅仅包含一个删除标志）。相对而言，主要合并会产生一个不包含删除数据的干净的SSTable。Bigtable会在后台周期性的遍历所有的tablets文件并且实施主要紧凑。
+这些主要紧凑使得Bigtable可以及时回收删除数据占用的资源，并且确保被删除的数据可以及时的从系统中消失，这对面向敏感数据的业务非常重要。
 
 # 6 改进
 为了实现高性能、高可用、高可靠，前面几个章节的实现还需要一些改进。这部分更加详细的描述这些改进
@@ -153,8 +154,8 @@ client端可以控制SSTables是否对一个局部组进行压缩以及使用哪
 向GFS写提交日志有时会出现性能波动，造成这种现象的原因有很多：比如相关的GFS服务器crash，或者将数据传输到GFS 3个备份的网络路径出现拥塞或者过载。为了防止GFS写入延迟出现毛刺，每个tablet server有两个写日志线程，每个写自己单独的日志文件；同一时刻，仅仅有一个线程处于主动状态。如果到日志文件的写入性能变得很差，日志文件的写入将切换到另外一个线程并且到提交日志队列的所有待提交更改将被另外一个线程接管。日志项包含顺序编号，这可以让恢复过程能识别出进程切换并消除期间产生的重复项目。
 
 ## 6.5 加速tablet恢复
-关键词：次要压缩，停止提供服务，次要压缩，卸载
-如果master将一个tablet从一个server迁移到另一个server，(1） 源tablet server首先对该tablet做一个次要压缩，这个压缩可以减少tablet server的提交日志中未提交状态的日志数量。(2) 当次要压缩结束后，tablet server将停止对该tablet提供读写服务。(4) 在他最终将该tablet分片卸载之前。 (3) 其会在做一个次要压缩来减少提交日志中未提交的日志数量（这批日志是在第一次压缩过程中新来的写请求，数据量非常少，所以很快）。当第二次次要压缩结束后，tablet可以被另外一个tablet server接管并且不需要从日志文件中进行恢复。
+关键词：次要紧凑，停止提供服务，次要紧凑，卸载
+如果master将一个tablet从一个server迁移到另一个server，(1） 源tablet server首先对该tablet做一个次要紧凑，这个紧凑可以减少tablet server的提交日志中未提交状态的日志数量。(2) 当次要紧凑结束后，tablet server将停止对该tablet提供读写服务。(4) 在他最终将该tablet分片卸载之前。 (3) 其会在做一个次要紧凑来减少提交日志中未提交的日志数量（这批日志是在第一次紧凑过程中新来的写请求，数据量非常少，所以很快）。当第二次次要紧凑结束后，tablet可以被另外一个tablet server接管并且不需要从日志文件中进行恢复。
 
 ## 6.6 不变形利用
 除了SSTable的cache，很多来自Bigtable系统其他部分都有一个简单的共性：我们产生的所有SSTable都是不可修改的。比如在从SSTable读取数据时我们不需要任何到文件系统的同步访问（说人话就是：不用读盘产生IO，缓存也可以用，因为底层都是只读的）。这样，多行的并发控制可以高效的实现。唯一可以被读操作和写操作可以访问到并且可能修改的数据结构是memtable。为了减少读memtable的冲突，我们对memtable中每个行的修改都执行 copy-and-write，允许读和写并发访问数据。
