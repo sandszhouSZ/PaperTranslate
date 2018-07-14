@@ -1,5 +1,5 @@
 # 利用分布式事务和通知机制的大规模增量索引处理
-
+[原文地址](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/Percolator%E3%80%90Google%E7%B4%A2%E5%BC%95%E5%A2%9E%E9%87%8F%E6%9B%B4%E6%96%B0%E7%B3%BB%E7%BB%9F%E3%80%91.md)
 
 # 摘要
 
