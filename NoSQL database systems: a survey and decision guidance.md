@@ -47,7 +47,7 @@ Bigtable、HBase
 ![宽列存储](https://github.com/sandszhouSZ/PaperTranslate/blob/EditBranch/image/Nosql-wide-column.png)
 Google为了存储大量网页特别开发Bigtable代表了宽-列存储模型，如图标3。网页表的每一行代表了一个特数据网页。行关键字是URL组件的反转级联组成，而且每个列关键字包含了：列族的名字和列通配符，其通过分好链接在一起。这里有两个列族：内容列族只包含一列用以存储真实的网页数据；anchor列族包含了到每个网页的连接，每个都是单独一列。表中的每个单元（行和列组合对应的数据）都可以通过时间戳或者版本号来被版本化。明确一个时间的多数信息不仅仅通过value而且是是通过key来表达。
 
-## 22 一致性-可用性折衷：CAP 和 PACELC
+## 2.2 一致性-可用性折衷：CAP 和 PACELC
 ```
 思路：
 CAP
