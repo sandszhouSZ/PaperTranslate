@@ -1,4 +1,5 @@
 # NoSQL database systems: a survey and decision guidance
+[英文原文](https://vsis-www.informatik.uni-hamburg.de/getDoc.php/publications/555/NoSQL%20database%20systems%20-%20a%20survey%20and%20decision%20guidance.pdf)
 
 # 摘要
 今天，数据正在以史无前例的规模被生成并且被消费。这种情况催生了面向持续增上的数据和请求的基于"NoSQL"的可扩展数据管理系统。但是，现有的系统的异构性和多样性使得在面对一个给定的应用上下文进行数据存储选型非常困难。因此，这篇文章从上层视角进行概括：我们并不打算深入对比每个系统的详细的实现特性，我们提供了一个  将功能和非功能的需求与NoSQL数据库中的技术和算法结合起来的比较分类模型。这个NoSQL工具箱使得我们可以根据一个简单的决策树来帮助从业者和研究者根据关键的应用需求过滤出潜在的备选系统。
@@ -193,8 +194,71 @@ NoSQL数据库的查询特性主要取决于其分布模型，一致性保证，
 
 
 
-
-
-
-
-
+# 参考文献
+1. Abadi D (2012) Consistency tradeoffs in modern distributed database system design: cap is only part of the story. Computer 45(2):37–
+    42
+2. Attiya H, Bar-Noy A et al (1995) Sharing memory robustly in message-passing systems. JACM 42(1)
+3. Bailis P, Kingsbury K (2014) The network is reliable. Commun ACM 57(9):48–55
+4. Baker J, Bond C, Corbett JC et al (2011) Megastore: providing scalable, highly available storage for interactive services. In: CIDR,
+    pp 223–234
+5. Bernstein PA, Cseri I, Dani N et al (2011) Adapting microsoft sql server for cloud computing. In: 27th ICDE, pp 1255–1263 IEEE
+6. Boykin O, Ritchie S, O’Connell I, Lin J (2014) Summingbird: aframework for integrating batch and online mapreduce computations.VLDB      7(13)
+7. Brewer EA (2000) Towards robust distributed systems
+8. Calder B, Wang J, Ogus A et al (2011) Windows azure storage: a highly available cloud storage service with strong consistency. In:
+    23th SOSP. ACM
+9. Chang F, Dean J, Ghemawat S et al (2006) Bigtable: a distributed storage system for structured data. In: 7th OSDI, USENIX    
+    Association,pp 15–15
+10. Charron-Bost B, Pedone F, Schiper A (2010) Replication: theory and practice, lecture notes in computer science, vol. 5959. Springer
+11. Cooper BF, Ramakrishnan R, Srivastava U et al (2008) Pnuts: Yahoo!’s hosted data serving platform. Proc VLDB Endow 1(2):1277–1288
+12. Corbett JC, Dean J, Epstein M, et al (2012) Spanner: Google’s globally-distributed database. In: Proceedings of OSDI, USENIX
+    Association, pp 251–264
+13. Curino C, Jones E, Popa RA et al. (2011) Relational cloud: a database service for the cloud. In: 5th CIDR
+14. Das S, Agrawal D, El Abbadi A et al (2010) G-store: a scalable  data store for transactional multi key access in the cloud. In: 1st
+    SoCC, ACM, pp 163–174
+15. Davidson SB, Garcia-Molina H, Skeen D et al (1985) Consistency  in a partitioned network: a survey. SUR 17(3):341–370
+16. Dean J (2009) Designs, lessons and advice from building large distributed systems. Keynote talk at LADIS 2009
+17. Dean J, Ghemawat S (2008) Mapreduce: simplified data processing on large clusters. COMMUN ACM 51(1)
+18. DeC andia G, Hastorun D et al (2007) Dynamo: amazon’s highly available key-value store. In: 21th SOSP, ACM, pp 205–220
+19. Fischer MJ, Lynch NA, Paterson MS (1985) Impossibility of distributed consensus with one faulty process. J ACM 32(2):374–382
+20. Gessert F, Schaarschmidt M, Wingerath W, Friedrich S, Ritter N (2015) The cache sketch: Revisiting expiration-based caching in the  
+    age of cloud data management. In: BTW, pp 53–72
+21. Gilbert S, Lynch N (2002) Brewer’s conjecture and the feasibility of consistent, available, partition-tolerant web services. SIGACT     News 33(2):51–59
+22. Gray J, Helland P (1996) The dangers of replication and a solution. SIGMOD Rec 25(2):173–182
+23. Haerder T, ReuterA(1983) Principles of transaction-oriented database  recovery. ACM Comput Surv 15(4):287–317
+24. Hamilton J (2007) On designing and deploying internet-scale services.In: 21st LISA. USENIX Association
+25. Hellerstein JM, Stonebraker M, Hamilton J (2007) Architecture of a database system. Now Publishers Inc
+26. Herlihy MP,Wing JM (1990) Linearizability: a correctness condition for concurrent objects. TOPLAS 12
+27. Hoelzle U, Barroso LA (2009) The Datacenter As a Computer: an introduction to the design of warehouse-scale machines. Morgan
+    and Claypool Publishers
+28. Hunt P, Konar M, Junqueira FP, Reed B (2010) Zookeeper: waitfree coordination for internet-scale systems. In: USENIXATC.            
+    USENIX Association
+29. Kallman R, Kimura H, Natkins J et al (2008) H-store: a highperformance, distributed main memory transaction processing
+    system. VLDB Endowment
+30. Karger D, Lehman E, Leighton T et al (1997) Consistent hashing  and random trees: distributed caching protocols for relieving hot
+    spots on the world wide web. In: 29th STOC, ACM
+31. Kleppmann M (2016) Designing data-intensive applications. O Reilly, to appear
+32. Kraska T, Pang G, FranklinMJet al (2013) Mdcc: Multi-data center  consistency. In: 8th EuroSys, ACM
+33. Kreps J (2014) Questioning the lambda architecture. Accessed: 17 Dec 2015
+34. Lakshman A, Malik P (2010) Cassandra: a decentralized structured storage system. SIGOPS Oper Syst Rev 44(2):35–40
+35. Laney D (2001) 3d data management: Controlling data volume,velocity, and variety. Tech. rep, META Group
+36. LloydW, FreedmanMJ, Kaminsky,Met al (2011) Don’t settle for eventual: scalable causal consistency for wide-area storage with
+    cops. In: 23th SOSP. ACM
+37. Mahajan P, Alvisi L, Dahlin M et al (2011) Consistency, availability,and convergence. University of Texas at Austin Tech Report
+    11
+38. Mao Y, Junqueira FP, Marzullo K (2008) Mencius: building efficient replicated state machines for wans. OSDI 8:369–384
+39. Marz N,Warren J (2015) Big data: principles and best practices of scalable realtime data systems. Manning Publications Co
+40. Min C, Kim K, Cho H et al (2012) Sfs: random write considered harmful in solid state drives. In: FAST
+41. Özsu MT, Valduriez P (2011) Principles of distributed database systems. Springer Science & Business Media
+42. Pritchett D (2008) Base: an acid alternative. Queue 6(3):48–55
+43. Qiao L, Surlaker K, Das S et al (2013) On brewing fresh espresso:Linkedin’s distributed data serving platform. In: SIGMOD, ACM,
+    pp 1135–1146
+44. Sadalage PJ, Fowler M (2013) NoSQL distilled : a brief guide to the emerging world of polyglot persistence. Addison-Wesley,
+    Upper Saddle River
+45. Shapiro M, Preguica N, Baquero C et al (2011) A comprehensive study of convergent and commutative replicated data types. Ph.D.
+    thesis, INRIA
+46. ShuklaD,Thota S,RamanKet al (2015) Schema-agnostic indexing with azure documentdb. PVLDB 8(12)
+47. SovranY, PowerR,Aguilera MK, Li J (2011) Transactional storage  for geo-replicated systems. In: 23th SOSP, ACM, pp 385–400
+48. Stonebraker M, Madden S, Abadi DJ et al (2007) The end of an  architectural era: (it’s time for a complete rewrite). In: 33rd VLDB, 
+      pp 1150–1160
+49. Wiese L et al (2015) Advanced Data Management: For SQL. Cloud and Distributed Databases. Walter de Gruyter GmbH & Co KG,NoSQL
+50. Zhang H, Chen G et al (2015) In-memory big data management and processing: a survey. TKDE
