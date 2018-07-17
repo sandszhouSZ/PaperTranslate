@@ -14,4 +14,5 @@
   - https://www.slideshare.net/IvanGlushkov/newsql-overview
   - https://www.voltdb.com/blog/2016/09/22/nosql-vs-newsql-whats-difference/
   - https://cs.brown.edu/courses/cs227/archives/2012/slides/newsql/newsql-intro.pdf
+  - https://www.predictiveanalyticstoday.com/newsql-databases/
 - NoSQL选型 见翻译
