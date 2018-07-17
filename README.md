@@ -7,3 +7,4 @@
 - Dapper分布式追踪系统 http://bigbully.github.io/Dapper-translation/
 - 学习链 https://github.com/xingshaocheng/architect-awesome/blob/master/README.md#hbase
 - 其他 https://levy.at/blog/22
+- API设计原则 https://coolshell.cn/articles/18024.html
