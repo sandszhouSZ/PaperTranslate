@@ -1,4 +1,5 @@
 # Bigtable：一种面向结构化数据的分布式式存储系统
+[原文地址](https://static.googleusercontent.com/media/research.google.com/zh-CN//archive/bigtable-osdi06.pdf)
 
 # 前沿
 Bigtable是一种设计于处理海量结构化数据的分布式存储系统：这些数据分布于成千上万台通用服务器上。Google的很多项目都是用Bigtable来进行底层数据存储,包括：网页索引，Google地图，Goole金融。这些应用对Bigtable提出了不同的需求：包括数据量（从URLS到网页到卫星图片）和延迟需求（从后端批量处理到实时数据服务）。尽管需求多种多样，但是Bigtable已经为所有的Google的产品成功的提供了灵活的、高性能的解决方案。这篇文章中，我们将描述Bigtable提供的一种简单的数据模型，其为client端提供了关于数据布局和格式的动态灵活的控制，而且我们将对Bigtable的设计和实施细节进行详细描述。
