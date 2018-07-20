@@ -32,5 +32,30 @@ Spanner通过一系列zones的集合组织在一起，每个zone只是类似Bigt
 表1展示了Spanner universe的节点情况，一个zone包含一个zonemaster以及成百上千的spannerservers。前者负责将数据分配到不同的spanner节点；后者向client提供数据。每个zone的位置代理服务被用于向client提供定位对应数据的spannerserver位置。universe master和placement driver目前是单点。 universe master主要展示所有zones交互的debug的状态信息。placement driver以分钟的粒度处理数据跨zone的自动迁移。placement driver周期性的和spanserver交互来发现需要移动的数据，或者去满足更新的副本约束或者为了均衡。为了空间的原因，我们只详细描述spanserver。
  
 # 2.1 Spanserver 软件栈
+这部分聚焦在spanserver的实现上来展示副本和分布式事务如何在基于Bigtable实现中进行分层。 软件栈在表2总进行展示。最底下，每个spanserver负责100-1000个tablet的实例的维护。一个tablet和Bigtable中的tablet抽象类似，tablet内部实现了很多下面的映射：（key：string，timestamp：int64） -> string,和Bigtable不同的是，Spanner将时间戳分配给数据，这是相比较key-value存储，Spanner为什么更像一个多-版本数据的重要依据。
+ 
+一个tablet的状态存储在一系列类似B-tree的文件以及一个WAL（提前写日志）中，存储在分布式文件系统的所有数据称为colossus（GFS的后继版本）。
+ 
+ 为了支持副本，每个spanserver在每个tablet基础上实现了一个简单的paxos状态机。（一个早期的Spanner前身每个tablet支持多个paxos状态机，可以允许更灵活的副本配置。那种设计过于复杂最终让我们选择放弃）每个状态机在其关联的tablet中存储了他的元数据和日志。我们的Paxos实现通过基于时间的leader选举支持长期有效的leader，时间戳的有效时间是10S。当前的Spanner实现对每个Paxos写记录两次：这种实现主要是基于简单性考虑，我们最总会对此进行优化。我们将Paxos实现为pipelined方式，以便在WAN时延的场景下提高Spanner的吞吐；但是Paxos对write的应用是按照顺序的（我们依赖于第4部分的事实）。
+ 
+ Paxos状态机被用于实现一个一致性的副本映射。对每个备份的key-value 映射状态存储于对应的tablet中。写操作必须在leader节点初始化Paxos协议；读直接访问任意一个足够新的副本的底层的tablet即可。副本的集合组成一个Paxos组。
+ 
+ 每个成为leader的副本的节点上，其spanserver实现了一个`lock 表`去实现并发控制。这个lock表包含了两-阶段锁的状态：它将key的范围映射到lock的状态（注意到 拥有一个长期有效的Paxos leader是管理lock表的关键）。在Bigtable和Spanner中，我们设计了长期-有效的事务（比如，为了报表生成，可能需要数十分钟），其在冲突存在时在乐观并发控制逻辑下会执行非常低效。需要同步的操作，比如事务操作的读，获得了lock表的锁；其他的操作绕开这个lock表。
+ 
+ 在每个成为leader的副本上，其Spanserver也会实现一个`事务管理着`来支持分布式事务。事务管理者被用于实现一个参与者leader；该组的其他副本会成为参与者slave。如果一个事务只涉及到一个Paxos组（对于绝大多数事务），可以绕过事务管理者，这是因为lock表和Paxos一起提供了事务能力。如果一个事务涉及到多余一个Paxos组，那些组的leaders需要协商实现两阶段提交。一个参与者组被选为参与者：这个组的参与者leader将被成为coordinator leader，该组的其他成员称为：coordinator slave。每个事务管理者的状态存储在底层的Paxos group中（因此也是副本化的）。
+ 
+ # 2.2 目录（bucket）和定位
+在一系列key-value映射的最上层,Spanner的实现支持一个 bucketing 抽象称为：目录，其是一系列共享同一前缀的连续的keys的集合。（选择directory是一个历史偶然；一个更好的名称为bucket）。我们将在2.3讲解前缀的来源。支持目录允许应用可以通过仔细的选择key来控制数据的位置布局。
+ 
+ 一个目录是数据布局的基本单位。一个目录下的所有数据具有同样的副本配置。当数据在Paxos组之间移动意味这数据在不同的目录下移动。比如表3。Spanner可能从Paxos组将一个目录进行移动以便负载均衡；将频繁访问的目录放在一个组中；或者将一个目录移动到离他的接入点更近的地方。目录可以在client的操作正在进行时进行被移动。你可以设想一个50MB的目录可以在几秒内移动完毕。
+ 
+ 一个事实是 Paxos组可能包含多个目录，表明一个spanner表和Bigtable表不一样：前者不一定是行空间在一个字典序连续的分区。而且，一个Spanner tablet是一个可以将行空间上的多个分片进行封装的容器。我们做这个决定以便可以将频繁访问的多个目录存储在一起。
+ 
+ MoveDir是一个用于将目录在Paxos组之间移动的后台任务。Movedir也被用于向Paxos group中添加或者从Paxos group中删除副本，因为Spanner尚不支持 Paxos内的配置变化。Movedir也不是一个单独的事务，这是为了在数据批量移动时避免阻塞进行中的读以及写。作为替代，movedir表明一个事实：开始移动数据并且将在后台移动。当已经移动绝大多数数据后，他将使用锁来原子的移动剩余的数据并且更新两个Paxos组的元数据。
+ 
+ 
+一个目录也是应用可以配置的副本地理特性的最小单位（数据定位）。我们的定位-规格语言的设计与管理副本配置是不相关的。系统管理控制两个纬度：副本的数量 和 副本的类型，副本的地理位置。他们在这两个纬度创建了很多命名的菜单选项（比如南美，replicated 5 ways with 1 witness)）。一个应用控制着数据如何复制，通过每个数据库的 与/或标志不同的目录和那些选项的组合。比如，一个应用可能存储每个终端用户的数据在自己的目录中，最终须臾用户A的数据在欧洲有3个副本，同时用户B的数据在南美有5个副本。
+ 
+ 
  
  
